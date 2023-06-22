@@ -10,7 +10,7 @@
   "contact": {
     "repo": "https://github.com/randomstuff69/Wurst-Nuker/"
   },
-  "icon": "assets/template/icon.png",
+  "icon": "assets/template/icontnt.png",
   "environment": "client",
   "entrypoints": {
     "meteor": [
