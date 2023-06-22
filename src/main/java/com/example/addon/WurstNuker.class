@@ -1,0 +1,242 @@
+/* Decompiler 122ms, total 216ms, lines 242 */
+package net.wurstclient.hacks;
+
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+import java.util.function.BiPredicate;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import net.minecraft.class_2246;
+import net.minecraft.class_2338;
+import net.minecraft.class_2382;
+import net.minecraft.class_243;
+import net.minecraft.class_3965;
+import net.minecraft.class_4587;
+import net.minecraft.class_746;
+import net.minecraft.class_239.class_240;
+import net.wurstclient.Category;
+import net.wurstclient.events.LeftClickListener;
+import net.wurstclient.events.RenderListener;
+import net.wurstclient.events.UpdateListener;
+import net.wurstclient.events.LeftClickListener.LeftClickEvent;
+import net.wurstclient.hack.Hack;
+import net.wurstclient.settings.BlockListSetting;
+import net.wurstclient.settings.BlockSetting;
+import net.wurstclient.settings.CheckboxSetting;
+import net.wurstclient.settings.EnumSetting;
+import net.wurstclient.settings.SliderSetting;
+import net.wurstclient.settings.SliderSetting.ValueDisplay;
+import net.wurstclient.util.BlockBreaker;
+import net.wurstclient.util.BlockUtils;
+import net.wurstclient.util.OverlayRenderer;
+import net.wurstclient.util.RotationUtils;
+
+public final class NukerHack extends Hack implements UpdateListener, LeftClickListener, RenderListener {
+   private final SliderSetting range;
+   private final EnumSetting<NukerHack.Mode> mode;
+   private final BlockSetting id;
+   private final CheckboxSetting lockId;
+   private final BlockListSetting multiIdList;
+   private final ArrayDeque<Set<class_2338>> prevBlocks;
+   private final OverlayRenderer renderer;
+   private class_2338 currentBlock;
+
+   public NukerHack() {
+      super("Nuker");
+      this.range = new SliderSetting("Range", 5.0D, 1.0D, 6.0D, 0.05D, ValueDisplay.DECIMAL);
+      this.mode = new EnumSetting("Mode", "§lNormal§r mode simply breaks everything around you.\n§lID§r mode only breaks the selected block type. Left-click on a block to select it.\n§lMultiID§r mode only breaks the block types in your MultiID List.\n§lFlat§r mode flattens the area around you, but won't dig down.\n§lSmash§r mode only breaks blocks that can be destroyed instantly (e.g. tall grass).", NukerHack.Mode.values(), NukerHack.Mode.NORMAL);
+      this.id = new BlockSetting("ID", "The type of block to break in ID mode.\nair = won't break anything", "minecraft:air", true);
+      this.lockId = new CheckboxSetting("Lock ID", "Prevents changing the ID by clicking on blocks or restarting Nuker.", false);
+      this.multiIdList = new BlockListSetting("MultiID List", "The types of blocks to break in MultiID mode.", new String[]{"minecraft:ancient_debris", "minecraft:bone_block", "minecraft:coal_ore", "minecraft:copper_ore", "minecraft:deepslate_coal_ore", "minecraft:deepslate_copper_ore", "minecraft:deepslate_diamond_ore", "minecraft:deepslate_emerald_ore", "minecraft:deepslate_gold_ore", "minecraft:deepslate_iron_ore", "minecraft:deepslate_lapis_ore", "minecraft:deepslate_redstone_ore", "minecraft:diamond_ore", "minecraft:emerald_ore", "minecraft:glowstone", "minecraft:gold_ore", "minecraft:iron_ore", "minecraft:lapis_ore", "minecraft:nether_gold_ore", "minecraft:nether_quartz_ore", "minecraft:raw_copper_block", "minecraft:raw_gold_block", "minecraft:raw_iron_block", "minecraft:redstone_ore"});
+      this.prevBlocks = new ArrayDeque();
+      this.renderer = new OverlayRenderer();
+      this.setCategory(Category.BLOCKS);
+      this.addSetting(this.range);
+      this.addSetting(this.mode);
+      this.addSetting(this.id);
+      this.addSetting(this.lockId);
+      this.addSetting(this.multiIdList);
+   }
+
+   public String getRenderName() {
+      return ((NukerHack.Mode)this.mode.getSelected()).getRenderName(this);
+   }
+
+   protected void onEnable() {
+      WURST.getHax().autoMineHack.setEnabled(false);
+      WURST.getHax().excavatorHack.setEnabled(false);
+      WURST.getHax().nukerLegitHack.setEnabled(false);
+      WURST.getHax().speedNukerHack.setEnabled(false);
+      WURST.getHax().tunnellerHack.setEnabled(false);
+      EVENTS.add(UpdateListener.class, this);
+      EVENTS.add(LeftClickListener.class, this);
+      EVENTS.add(RenderListener.class, this);
+   }
+
+   protected void onDisable() {
+      EVENTS.remove(UpdateListener.class, this);
+      EVENTS.remove(LeftClickListener.class, this);
+      EVENTS.remove(RenderListener.class, this);
+      if (this.currentBlock != null) {
+         IMC.getInteractionManager().setBreakingBlock(true);
+         MC.field_1761.method_2925();
+         this.currentBlock = null;
+      }
+
+      this.prevBlocks.clear();
+      this.renderer.resetProgress();
+      if (!this.lockId.isChecked()) {
+         this.id.setBlock(class_2246.field_10124);
+      }
+
+   }
+
+   public void onUpdate() {
+      this.currentBlock = null;
+      if (!MC.field_1690.field_1886.method_1434()) {
+         if (this.mode.getSelected() != NukerHack.Mode.ID || this.id.getBlock() != class_2246.field_10124) {
+            class_746 player = MC.field_1724;
+            class_243 eyesPos = RotationUtils.getEyesPos().method_1023(0.5D, 0.5D, 0.5D);
+            class_2338 eyesBlock = class_2338.method_49638(RotationUtils.getEyesPos());
+            double rangeSq = Math.pow(this.range.getValue(), 2.0D);
+            int blockRange = (int)Math.ceil(this.range.getValue());
+            class_2382 rangeVec = new class_2382(blockRange, blockRange, blockRange);
+            class_2338 min = eyesBlock.method_10059(rangeVec);
+            class_2338 max = eyesBlock.method_10081(rangeVec);
+            ArrayList<class_2338> blocks = BlockUtils.getAllInBox(min, max);
+            Stream<class_2338> stream = blocks.parallelStream();
+            List<class_2338> blocks2 = (List)stream.filter((posx) -> {
+               return eyesPos.method_1025(class_243.method_24954(posx)) <= rangeSq;
+            }).filter(BlockUtils::canBeClicked).filter(((NukerHack.Mode)this.mode.getSelected()).getValidator(this)).sorted(Comparator.comparingDouble((posx) -> {
+               return eyesPos.method_1025(class_243.method_24954(posx));
+            })).collect(Collectors.toList());
+            if (player.method_31549().field_7477) {
+               Stream<class_2338> stream2 = blocks2.parallelStream();
+
+               Set set;
+               for(Iterator var17 = this.prevBlocks.iterator(); var17.hasNext(); stream2 = stream2.filter((posx) -> {
+                  return !set.contains(posx);
+               })) {
+                  set = (Set)var17.next();
+               }
+
+               List<class_2338> blocks3 = (List)stream2.collect(Collectors.toList());
+               this.prevBlocks.addLast(new HashSet(blocks3));
+
+               while(this.prevBlocks.size() > 5) {
+                  this.prevBlocks.removeFirst();
+               }
+
+               if (!blocks3.isEmpty()) {
+                  this.currentBlock = (class_2338)blocks3.get(0);
+               }
+
+               MC.field_1761.method_2925();
+               this.renderer.resetProgress();
+               BlockBreaker.breakBlocksWithPacketSpam(blocks3);
+            } else {
+               Iterator var13 = blocks2.iterator();
+
+               while(var13.hasNext()) {
+                  class_2338 pos = (class_2338)var13.next();
+                  if (BlockBreaker.breakOneBlock(pos)) {
+                     this.currentBlock = pos;
+                     break;
+                  }
+               }
+
+               if (this.currentBlock == null) {
+                  MC.field_1761.method_2925();
+               }
+
+               if (this.currentBlock != null && BlockUtils.getHardness(this.currentBlock) < 1.0F) {
+                  this.renderer.updateProgress();
+               } else {
+                  this.renderer.resetProgress();
+               }
+
+            }
+         }
+      }
+   }
+
+   public void onLeftClick(LeftClickEvent event) {
+      if (this.mode.getSelected() == NukerHack.Mode.ID) {
+         if (!this.lockId.isChecked()) {
+            if (MC.field_1765 != null && MC.field_1765.method_17783() == class_240.field_1332) {
+               class_3965 blockHitResult = (class_3965)MC.field_1765;
+               class_2338 pos = new class_2338(blockHitResult.method_17777());
+               this.id.setBlockName(BlockUtils.getName(pos));
+            }
+         }
+      }
+   }
+
+   public void onRender(class_4587 matrixStack, float partialTicks) {
+      this.renderer.render(matrixStack, partialTicks, this.currentBlock);
+   }
+
+   private static enum Mode {
+      NORMAL("Normal", Hack::getName, (n, p) -> {
+         return true;
+      }),
+      ID("ID", (n) -> {
+         String var10000 = n.id.getBlockName();
+         return "IDNuker [" + var10000.replace("minecraft:", "") + "]";
+      }, (n, p) -> {
+         return BlockUtils.getName(p).equals(n.id.getBlockName());
+      }),
+      MULTI_ID("MultiID", (n) -> {
+         int var10000 = n.multiIdList.getBlockNames().size();
+         return "MultiIDNuker [" + var10000 + (n.multiIdList.getBlockNames().size() == 1 ? " ID]" : " IDs]");
+      }, (n, p) -> {
+         return n.multiIdList.getBlockNames().contains(BlockUtils.getName(p));
+      }),
+      FLAT("Flat", (n) -> {
+         return "FlatNuker";
+      }, (n, p) -> {
+         return (double)p.method_10264() >= NukerHack.MC.field_1724.method_19538().method_10214();
+      }),
+      SMASH("Smash", (n) -> {
+         return "SmashNuker";
+      }, (n, p) -> {
+         return BlockUtils.getHardness(p) >= 1.0F;
+      });
+
+      private final String name;
+      private final Function<NukerHack, String> renderName;
+      private final BiPredicate<NukerHack, class_2338> validator;
+
+      private Mode(String name, Function<NukerHack, String> renderName, BiPredicate<NukerHack, class_2338> validator) {
+         this.name = name;
+         this.renderName = renderName;
+         this.validator = validator;
+      }
+
+      public String toString() {
+         return this.name;
+      }
+
+      public String getRenderName(NukerHack n) {
+         return (String)this.renderName.apply(n);
+      }
+
+      public Predicate<class_2338> getValidator(NukerHack n) {
+         return (p) -> {
+            return this.validator.test(n, p);
+         };
+      }
+
+      // $FF: synthetic method
+      private static NukerHack.Mode[] $values() {
+         return new NukerHack.Mode[]{NORMAL, ID, MULTI_ID, FLAT, SMASH};
+      }
+   }
+}
