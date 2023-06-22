@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "addon-template",
   "version": "${version}",
-  "name": "Addon Template",
-  "description": "An addon template for the Meteor addons.",
+  "name": "Wurst Nuker",
+  "description": "the wurst nuker in meteor because the meteor nuker sucks",
   "authors": [
     "seasnail"
   ],
   "contact": {
-    "repo": "https://github.com/MeteorDevelopment/meteor-addon-template"
+    "repo": "https://github.com/randomstuff69/Wurst-Nuker/"
   },
   "icon": "assets/template/icon.png",
   "environment": "client",
